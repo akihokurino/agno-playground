@@ -1,11 +1,13 @@
-FROM --platform=arm64 postgres:17.1
+FROM python:3.13.1
 
-RUN apt-get update && \
-    apt-get install -y git make gcc postgresql-server-dev-17
+RUN apt-get update && apt-get install -y curl build-essential
 
-RUN cd /tmp && \
-    git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git && \
-    cd pgvector && \
-    make && \
-    make install && \
-    cd ../ && rm -rf pgvector
+# tantivyがRustに依存しているのでインストール
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustc --version
+
+RUN pip install poetry
+WORKDIR /app
+COPY pyproject.toml poetry.lock ./
+RUN poetry config virtualenvs.create false && poetry install --no-root

@@ -55,5 +55,5 @@ run-hackernews-team-agent:
 run-playground:
 	source venv/bin/activate && python -m playground
 
-run-db:
+run:
 	docker-compose up
