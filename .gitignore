@@ -1,0 +1,7 @@
+.idea
+venv
+db
+postgres
+local_pdf.pdf
+.env
+__pycache__
