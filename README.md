@@ -8,3 +8,26 @@
 ## Links
 
 - https://docs.agno.com/introduction
+
+## Sample Request
+
+```shell
+curl -X 'POST' \
+  'http://localhost:8080/prepare' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "document_id": "sample",
+  "gs_key": "sample.pdf"
+}'
+```
+
+```shell
+curl -X 'POST' \
+  'http://localhost:8080/summary' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "document_id": "sample"
+}'
+```

@@ -57,3 +57,13 @@ run-playground:
 
 run:
 	docker-compose up
+
+run-db:
+	docker-compose up db
+
+run-api:
+	source venv/bin/activate && python -m api
+
+gcloud-login:
+	gcloud --quiet config set project akiho-playground-450111
+	gcloud auth application-default login
