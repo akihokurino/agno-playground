@@ -23,17 +23,6 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 db_url = f"postgresql+psycopg://postgres:postgres@{DB_HOST}:5432/agno"
 
 
-def download_object(
-    key: str,
-    destination_file_name: str,
-    bucket_name: str = "agno-playground",
-) -> None:
-    cli = storage.Client()
-    bucket = cli.bucket(bucket_name)
-    blob = bucket.blob(key)
-    blob.download_to_filename(destination_file_name)
-
-
 @final
 class PreparePayload(BaseModel):
     document_id: str
@@ -75,6 +64,17 @@ class Extract(BaseModel):
     )
 
 
+def download_object(
+    key: str,
+    destination_file_name: str,
+    bucket_name: str = "agno-playground",
+) -> None:
+    cli = storage.Client()
+    bucket = cli.bucket(bucket_name)
+    blob = bucket.blob(key)
+    blob.download_to_filename(destination_file_name)
+
+
 def get_vector(document_id: str) -> PgVector:
     return PgVector(
         table_name=document_id,
@@ -85,14 +85,22 @@ def get_vector(document_id: str) -> PgVector:
     )
 
 
+def create_knowledge(path: str, document_id: str) -> AgentKnowledge:
+    knowledge = PDFKnowledgeBase(
+        path=path, vector_db=get_vector(document_id), num_documents=10
+    )
+    knowledge.load(recreate=True)
+    return knowledge
+
+
+def get_knowledge(document_id: str) -> AgentKnowledge:
+    return AgentKnowledge(vector_db=get_vector(document_id), num_documents=10)
+
+
 @app.post("/prepare")
 async def prepare(payload: PreparePayload) -> Empty:
     download_object(payload.gs_key, "downloaded.pdf")
-    knowledge_base = PDFKnowledgeBase(
-        path="downloaded.pdf",
-        vector_db=get_vector(payload.document_id),
-    )
-    knowledge_base.load(recreate=True)
+    create_knowledge(path="downloaded.pdf", document_id=payload.document_id)
     os.remove("downloaded.pdf")
     return Empty()
 
@@ -106,7 +114,7 @@ async def summary(payload: AskPayload) -> Text:
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
+        knowledge=get_knowledge(payload.document_id),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -143,7 +151,7 @@ async def extract(payload: AskPayload) -> Text:
             "# エンジニアリングマネージャー",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
+        knowledge=get_knowledge(payload.document_id),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -166,7 +174,7 @@ async def extract_json(payload: AskPayload) -> Text:
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
+        knowledge=get_knowledge(payload.document_id),
         response_model=Extract,
         add_references=True,
         search_knowledge=False,
@@ -190,7 +198,7 @@ async def calc(payload: AskPayload) -> Text:
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
+        knowledge=get_knowledge(payload.document_id),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -206,7 +214,7 @@ async def calc(payload: AskPayload) -> Text:
 
 @app.post("/delete")
 async def delete(payload: AskPayload) -> Empty:
-    knowledge = AgentKnowledge(vector_db=get_vector(payload.document_id))
+    knowledge = get_knowledge(payload.document_id)
     knowledge.delete()
     return Empty()
 
