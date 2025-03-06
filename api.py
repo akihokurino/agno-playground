@@ -10,7 +10,7 @@ from agno.vectordb.pgvector import PgVector, SearchType as PgSearchType  # type:
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from google.cloud import storage
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -41,7 +41,7 @@ class PreparePayload(BaseModel):
 
 
 @final
-class SummaryPayload(BaseModel):
+class AskPayload(BaseModel):
     document_id: str
 
 
@@ -53,6 +53,38 @@ class Text(BaseModel):
 @final
 class Empty(BaseModel):
     pass
+
+
+@final
+class Extract(BaseModel):
+    result1: str = Field(
+        ...,
+        description="エンジニアリングマネージャーとしてのPRを抽出してください",
+    )
+    result2: str = Field(
+        ...,
+        description="プロジェクトマネージャーとしてのPRを抽出してください",
+    )
+    result3: str = Field(
+        ...,
+        description="エンジニアとしてのPRを抽出してください",
+    )
+    result4: str = Field(
+        ...,
+        description="副業での経験を抽出してください",
+    )
+
+
+def get_knowledge_base(document_id: str) -> AgentKnowledge:
+    return AgentKnowledge(
+        vector_db=PgVector(
+            table_name=document_id,
+            db_url=db_url,
+            search_type=PgSearchType.hybrid,
+            schema="agno",
+            embedder=OpenAIEmbedder(id="text-embedding-3-small"),
+        ),
+    )
 
 
 @app.post("/prepare")
@@ -74,24 +106,15 @@ async def prepare(payload: PreparePayload) -> Empty:
 
 
 @app.post("/summary")
-async def summary(payload: SummaryPayload) -> Text:
-    knowledge_base = AgentKnowledge(
-        vector_db=PgVector(
-            table_name=payload.document_id,
-            db_url=db_url,
-            search_type=PgSearchType.hybrid,
-            schema="agno",
-        ),
-    )
-
+async def summary(payload: AskPayload) -> Text:
     agent = Agent(
-        description="あなたはPDF文書を読み取り、ユーザーの欲しい情報を抽出・要約するスペシャリストです",
+        description="あなたはPDF文書を読み取り、ユーザーの欲しい情報を要約するスペシャリストです",
         instructions=[
             "あなたのナレッジベースから回答してください。",
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=knowledge_base,
+        knowledge=get_knowledge_base(payload.document_id),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -100,9 +123,100 @@ async def summary(payload: SummaryPayload) -> Text:
     response = agent.run("経歴を要約してください")
     content = response.content
     if content is None:
-        return Text(text="要約できませんでした")
+        raise ValueError("No content found")
 
     return Text(text=str(content))
+
+
+@app.post("/extract")
+async def extract(payload: AskPayload) -> Text:
+    agent = Agent(
+        description="あなたはPDF文書を読み取り、ユーザーの欲しい情報を抽出するスペシャリストです",
+        instructions=[
+            "あなたのナレッジベースから回答してください。",
+            "ナレッジベースの情報のみを参照してください。",
+            "回答は指示したフォーマットだけにしてください。"
+            "以下は回答のフォーマットです。",
+            "\n\n",
+            "# Webフロントエンド",
+            "\n",
+            "# iOS/Android",
+            "\n",
+            "# バックエンド",
+            "\n",
+            "# インフラ",
+            "\n",
+            "# プロジェクトマネージャー",
+            "\n",
+            "# エンジニアリングマネージャー",
+        ],
+        model=OpenAIChat(id="gpt-4o"),
+        knowledge=get_knowledge_base(payload.document_id),
+        add_references=True,
+        search_knowledge=False,
+        markdown=True,
+    )
+
+    response = agent.run("使っている技術や経験を教えてください。（Java, Azureなど）")
+    content = response.content
+    if content is None:
+        raise ValueError("No content found")
+
+    return Text(text=str(content))
+
+
+@app.post("/extract_json")
+async def extract_json(payload: AskPayload) -> Text:
+    agent = Agent(
+        description="あなたはPDF文書を読み取り、ユーザーの欲しい情報を抽出するスペシャリストです",
+        instructions=[
+            "あなたのナレッジベースから回答してください。",
+            "ナレッジベースの情報のみを参照してください。",
+        ],
+        model=OpenAIChat(id="gpt-4o"),
+        knowledge=get_knowledge_base(payload.document_id),
+        response_model=Extract,
+        add_references=True,
+        search_knowledge=False,
+        markdown=True,
+    )
+
+    response = agent.run("指定したJSONの構造に沿って回答してください。")
+    content = response.content
+    if content is None:
+        raise ValueError("No content found")
+
+    return Text(text=str(content))
+
+
+@app.post("/calc")
+async def calc(payload: AskPayload) -> Text:
+    agent = Agent(
+        description="あなたはPDF文書を読み取り、ユーザーの欲しい情報を抽出するスペシャリストです",
+        instructions=[
+            "あなたのナレッジベースから回答してください。",
+            "ナレッジベースの情報のみを参照してください。",
+        ],
+        model=OpenAIChat(id="gpt-4o"),
+        knowledge=get_knowledge_base(payload.document_id),
+        add_references=True,
+        search_knowledge=False,
+        markdown=True,
+    )
+
+    response = agent.run("彼はこれまでに何回転職していますか？")
+    content = response.content
+    if content is None:
+        raise ValueError("No content found")
+
+    return Text(text=str(content))
+
+
+@app.post("/delete")
+async def delete(payload: AskPayload) -> Empty:
+    knowledge = get_knowledge_base(payload.document_id)
+    knowledge.delete()
+    return Empty()
 
 
 if __name__ == "__main__":

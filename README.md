@@ -31,3 +31,23 @@ curl -X 'POST' \
   "document_id": "sample"
 }'
 ```
+
+```shell
+curl -X 'POST' \
+  'http://localhost:8080/extract' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "document_id": "sample"
+}'
+```
+
+```shell
+curl -X 'POST' \
+  'http://localhost:8080/extract_json' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "document_id": "sample"
+}'
+```
