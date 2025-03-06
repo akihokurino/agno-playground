@@ -75,15 +75,13 @@ class Extract(BaseModel):
     )
 
 
-def get_knowledge_base(document_id: str) -> AgentKnowledge:
-    return AgentKnowledge(
-        vector_db=PgVector(
-            table_name=document_id,
-            db_url=db_url,
-            search_type=PgSearchType.hybrid,
-            schema="agno",
-            embedder=OpenAIEmbedder(id="text-embedding-3-small"),
-        ),
+def get_vector(document_id: str) -> PgVector:
+    return PgVector(
+        table_name=document_id,
+        db_url=db_url,
+        search_type=PgSearchType.hybrid,
+        schema="agno",
+        embedder=OpenAIEmbedder(id="text-embedding-3-small"),
     )
 
 
@@ -92,13 +90,7 @@ async def prepare(payload: PreparePayload) -> Empty:
     download_object(payload.gs_key, "downloaded.pdf")
     knowledge_base = PDFKnowledgeBase(
         path="downloaded.pdf",
-        vector_db=PgVector(
-            table_name=payload.document_id,
-            db_url=db_url,
-            search_type=PgSearchType.hybrid,
-            schema="agno",
-            embedder=OpenAIEmbedder(id="text-embedding-3-small"),
-        ),
+        vector_db=get_vector(payload.document_id),
     )
     knowledge_base.load(recreate=True)
     os.remove("downloaded.pdf")
@@ -114,7 +106,7 @@ async def summary(payload: AskPayload) -> Text:
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=get_knowledge_base(payload.document_id),
+        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -151,7 +143,7 @@ async def extract(payload: AskPayload) -> Text:
             "# エンジニアリングマネージャー",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=get_knowledge_base(payload.document_id),
+        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -174,7 +166,7 @@ async def extract_json(payload: AskPayload) -> Text:
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=get_knowledge_base(payload.document_id),
+        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
         response_model=Extract,
         add_references=True,
         search_knowledge=False,
@@ -198,7 +190,7 @@ async def calc(payload: AskPayload) -> Text:
             "ナレッジベースの情報のみを参照してください。",
         ],
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=get_knowledge_base(payload.document_id),
+        knowledge=AgentKnowledge(vector_db=get_vector(payload.document_id)),
         add_references=True,
         search_knowledge=False,
         markdown=True,
@@ -214,7 +206,7 @@ async def calc(payload: AskPayload) -> Text:
 
 @app.post("/delete")
 async def delete(payload: AskPayload) -> Empty:
-    knowledge = get_knowledge_base(payload.document_id)
+    knowledge = AgentKnowledge(vector_db=get_vector(payload.document_id))
     knowledge.delete()
     return Empty()
 
